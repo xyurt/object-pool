@@ -34,7 +34,7 @@ int main(int argc, char *argv[]) {
 		packet_p->length = strlen(packet_payload);
 		memcpy(packet_p->payload, packet_payload, packet_p->length);
 
-		packet_send(packet_p); /* Sent the packet */
+		packet_send(packet_p); /* Send the packet */
 
 		/* Pushes the packet back to the object pool */
 		object_pool_push(packet_p); 

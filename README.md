@@ -18,7 +18,7 @@ The goal is predictable performance and minimal allocation overhead in long-runn
 - Lightweight design for systems and embedded use
 
 # Core Concept
-## Instead of repeatedly allocating and freeing memory, a block of objects is allocated once and reused.
+**Instead of repeatedly allocating and freeing memory, a block of objects is allocated once and reused.**
 
 ### pop → take an object from the pool
 ### use it

@@ -14,7 +14,6 @@ The goal is predictable performance and minimal allocation overhead in long-runn
 - Simple push/pop API
 - O(1) allocation and deallocation
 - Reduced heap fragmentation through reuse
-- Optional dynamic implementation mode
 - Lightweight design for systems and embedded use
 
 # Core Concept

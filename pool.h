@@ -3,74 +3,77 @@
 #ifndef _OBJECT_POOL_H
 #define _OBJECT_POOL_H
 
-/*  
-
-	The object pool may work with threads but aren't fully thread-safe and not recommended
-
-	To get the dynamic pool implementation, globally define _OBJECT_POOL_DYNAMIC_IMPL
-
-*/
-
 #include <stddef.h>
 
-/* Do not modify the structure */
-typedef struct object_pool_t {
-	void *block;
-	size_t head; /* Linked list's head's offset based on memory_block */
-	size_t tail; /* Linked list's tail's offset based on memory_block */
-	size_t last; /* Last object's offset based on memory_block */
-	size_t count; /* Count of objects */
-} object_pool;
+typedef size_t object_pool_index_t; 
+/* 
+- Internal pool index storage size
+- changing this will change the overhead size and the maximum amount of objects in a pool 
+*/
 
-/* Object pool has to be initialized before anything */
-int object_pool_init(struct object_pool_t *pool);
+typedef object_pool_index_t object_pool_count_t;
 
-/* Allocates the objects */
-int object_pool_create(struct object_pool_t *pool, size_t object_count, size_t object_size);
+typedef size_t object_pool_size_t; 
+/* 
+- Size_t alternative
+- can be modified but changes nothing 
+*/
 
-/* Frees the objects | All handles and object pointers are invalid after freed | Objects needn't to be pushed back before freeing */
-int object_pool_free(struct object_pool_t *pool);
+typedef unsigned char object_pool_handle_t; 
+/* 
+- unsigned char allows 256 different handle IDs (0–255), and they can be reused. 
+- changing this will change the overhead size
+*/
 
-/* Returns one if the pool is empty zero if not */
-int object_pool_empty(struct object_pool_t *pool);
+typedef object_pool_handle_t object_pool;
 
-/* Returns the capacity of the pool */
-size_t object_pool_capacity(struct object_pool_t *pool);
+/* 
+Creates an object pool
+- Returns an object pool handle on success, zero on failure
+- Arguments must be more than zero 
+*/
+object_pool_handle_t object_pool_create(object_pool_count_t object_count, object_pool_size_t object_size);
 
-/* Returns the pool's first object's size, in bytes */
-size_t object_pool_object_size(struct object_pool_t *pool);
+/* 
+Destroys an object pool and invalidates the handle
+- Returns 1 if success else 0 
+- Passing an invalid handle is undefined behaviour 
+*/
+int object_pool_destroy(object_pool_handle_t handle);
 
-/* Returns the pool's first object's size including the metadata, in bytes */
-size_t object_pool_object_full_size(struct object_pool_t *pool);
+/* 
+Pops an object from the pool 
+- The object's ownership is strictly pool's
+- Object must not be freed
+- Read and write operations must be within the object bounds
+- Passing an invalid handle is undefined behaviour 
+*/
+void *object_pool_pop(object_pool_handle_t handle);
 
-/* Returns the pool's total memory usage, in bytes */
-size_t object_pool_memory_footprint(struct object_pool_t *pool);
-
-#ifndef _OBJECT_POOL_DYNAMIC_IMPL
-
-/* Pop the next object's pointer | The pointer is owned by the pool and must not be changed | Reading and writing more than the object's size will corrupt the pool */
-void *object_pool_pop(struct object_pool_t *pool);
-
-#else
-
-/* Get the object's pointer | The pointer is owned by the pool and must not be changed | Invalid handle will lead to corruption | Reading and writing more than the object's size will corrupt the pool */
-void *object_pool_get(struct object_pool_t *pool, size_t object_handle);
-
-/* Returns one if the handle is invalid zero if not */
-int object_pool_handle_invalid(size_t object_handle);
-
-/* Pop the next object's handle | Using an object handle from another pool is undefined behaviour */
-size_t object_pool_pop(struct object_pool_t *pool);
-
-/* Push the object back into the pool using its handle | Handle becomes invalid after push operation | Using invalid handles will lead to corruption */
-int object_pool_push_handle(struct object_pool_t *pool, size_t object_handle);
-
-/* Grow the pool dynamically | When grown, all pointers of the objects become invalid so handles must be used */
-int object_pool_grow(struct object_pool_t *pool, size_t new_count);
-
-#endif
-
-/* Push the object back into the pool | Pushing the same object twice will lead to corruption | Object must be valid and allocated by a pool */
+/* 
+Push an object back to the pool 
+- Invalidates the object pointer 
+*/
 int object_pool_push(void *object);
+
+/*
+Returns the amount of objects that are waiting to be popped and free
+*/
+object_pool_count_t object_pool_free_count(object_pool_handle_t handle);
+
+/*
+Returns the amount of objects that are in use
+*/
+object_pool_count_t object_pool_active_count(object_pool_handle_t handle);
+
+/*
+Returns the total amount of objects
+*/
+object_pool_count_t object_pool_total_count(object_pool_handle_t handle);
+
+/*
+Returns the object size
+*/
+object_pool_count_t object_pool_object_size(object_pool_handle_t handle);
 
 #endif /* _OBJECT_POOL_H */

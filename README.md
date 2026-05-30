@@ -37,4 +37,4 @@ The goal is predictable performance and minimal allocation overhead in long-runn
 - Anything else that comes to mind
 
 # License
-# MIT
+**MIT**

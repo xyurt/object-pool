@@ -3,271 +3,352 @@
 #include <stdlib.h>
 #include <string.h>
 
-int object_pool_init(struct object_pool_t *pool) {
-	if (pool == NULL) {
-		return -1;
+/* Constant values must not be changed */
+#define MAX_TOTAL_MEMORY_FOR_STRUCTURES (SIZE_MAX - sizeof(struct object_pool_t))
+
+#define MEMORY_FOR_STRUCTURE_HEADERS (sizeof(object_pool_handle_t) + sizeof(object_pool_index_t))
+#define MAX_MEMORY_FOR_OBJECT_DATA (SIZE_MAX - MEMORY_FOR_STRUCTURE_HEADERS)
+
+#define MEMORY_FOR_STRUCTURE(object_size) (MEMORY_FOR_STRUCTURE_HEADERS + (size_t)(object_size))
+
+struct object_pool_t {
+	struct object_pool_t *next;			  /* Object pool linked list next pointer */
+	struct object_pool_t *prev;			  /* Object pool linked list previous pointer */
+	object_pool_handle_t handle;		  /* Object pool handle */
+	object_pool_index_t head; 	   		  /* Objects' linked list's head's index based on the memory_block */
+	object_pool_index_t free_count;	   	  /* Amount of objects that can be popped */
+	object_pool_index_t active_count;     /* Amount of objects that is in use */
+	object_pool_index_t total_count;	  /* Total objects in the memory block */
+	object_pool_size_t object_size;    	  /* One object's size */
+	size_t structure_size;	  	   		  /* Whole structure size of one object takes in the memory block */
+	/*void block[];					      /* Memory block where objects are stored in, not in the struct but available in memory */
+};
+
+struct object_pool_free_handle_t {
+	struct object_pool_free_handle_t *next;
+	object_pool_handle_t handle;
+};
+
+struct object_pool_vector_t {
+	void *data;
+	object_pool_handle_t capacity;
+	object_pool_handle_t count;
+	struct object_pool_free_handle_t *free_handle_list;
+};
+
+struct object_pool_vector_t _object_pool_vector;
+
+/*
+
+Index zero is reserved for NULL check
+
+struct:
+	object_pool_handle_t pool_handle;
+	object_pool_index_t next_idx;
+	void data[data_length];
+
+*/
+
+char object_pool_create_will_overflow(object_pool_count_t object_count, object_pool_size_t object_size, size_t *structure_size) {
+	size_t max_object_count;
+	size_t structure_size_temp;
+
+	if (object_count <= 0 || object_size <= 0) {
+		/* Object count or object size cannot be lower than or equal to zero */
+		return 1;
 	}
 
-	memset(pool, 0, sizeof(struct object_pool_t));
+	if (object_size > MAX_MEMORY_FOR_OBJECT_DATA) {
+		/* Object structure size overflows */
+		return 1;
+	}
 
-	pool->head = pool->tail = 1;
+	/* Memory needed for one object structure */
+	structure_size_temp = MEMORY_FOR_STRUCTURE(object_size);
+
+	max_object_count = MAX_TOTAL_MEMORY_FOR_STRUCTURES / structure_size_temp;
+	if (max_object_count == 0) {
+		/* Total structure size exceeds the limit */
+		return 1;
+	}
+	max_object_count -= 1; /* Index zero for structures is reserved */
+
+	if (object_count > max_object_count) {
+		/* Object count overflows the size required to call malloc() */
+		return 1;
+	}
+
+	*structure_size = structure_size_temp;
 
 	return 0;
 }
 
-int object_pool_create(struct object_pool_t *pool, size_t object_count, size_t object_size) {
+char object_pool_global_list_grow() {
+	/* Could've only used realloc but maybe the system doesn't accept zero as an argument so splitted into two ifs */
+	if (_object_pool_vector.data == NULL) {
+		_object_pool_vector.data = malloc(sizeof(void *));
+		if (_object_pool_vector.data == NULL) {
+			return 0;
+		}
+
+		_object_pool_vector.capacity = 1;
+	}
+	else {
+		if (_object_pool_vector.count >= _object_pool_vector.capacity) {
+			void *new_block;
+			size_t global_vector_new_capacity;
+			if ((size_t)(_object_pool_vector.capacity) > (SIZE_MAX >> 1)) {
+				if ((size_t)(_object_pool_vector.capacity) < SIZE_MAX) {
+					global_vector_new_capacity = _object_pool_vector.capacity + 1;
+				}
+				else {
+					return 0;
+				}
+			}
+			else {
+				global_vector_new_capacity = ((size_t)_object_pool_vector.capacity) << 1;
+			}
+
+			if (global_vector_new_capacity == SIZE_MAX) {
+				global_vector_new_capacity = SIZE_MAX - 1;
+
+				if (_object_pool_vector.capacity == global_vector_new_capacity) {
+					return 0;
+				}
+			}
+
+			new_block = realloc(_object_pool_vector.data, sizeof(void *) * global_vector_new_capacity);
+			if (new_block == NULL) {
+				return 0;
+			}
+			_object_pool_vector.data = new_block;
+
+			_object_pool_vector.capacity = global_vector_new_capacity;
+		}
+	}
+
+	return 1;
+}
+
+void object_pool_global_list_get_free_handle(object_pool_handle_t *out) {
+	if (_object_pool_vector.free_handle_list == NULL) {
+		*out = _object_pool_vector.count + 1;
+		return;
+	}
+
+	struct object_pool_free_handle_t *next_handle;
+
+	next_handle = _object_pool_vector.free_handle_list;
+	*out = next_handle->handle;
+
+	_object_pool_vector.free_handle_list = next_handle->next;
+
+	free(next_handle);
+}
+
+char object_pool_global_list_add(struct object_pool_t *pool) {
+	object_pool_handle_t handle;
+
+	if (pool == NULL || !object_pool_global_list_grow()) {
+		return 0;
+	}
+
+	object_pool_global_list_get_free_handle(&handle);
+	
+	*(void **)(((char *)_object_pool_vector.data) + ((handle - 1) * sizeof(void *))) = pool;
+	pool->handle = handle;
+
+	_object_pool_vector.count++;
+
+	return 1;
+}
+
+char object_pool_create_initialize_objects(struct object_pool_t *pool) {
+	char *object_p;
+	object_pool_count_t i;
+
+	if (pool == NULL) {
+		return 0;
+	}
+
+	object_p = ((char *)pool) + sizeof(struct object_pool_t);
+	for (i = 0; i < pool->total_count; i++) {
+
+		*((object_pool_handle_t *)object_p) = pool->handle;
+		*((object_pool_index_t *)(((char *)object_p) + sizeof(object_pool_handle_t))) = i == pool->total_count - 1 ? 2 : i + 2; /* Index zero is reserved for NULL check */
+
+		object_p += pool->structure_size;
+	}
+
+	pool->head = 1;
+
+	pool->free_count = pool->total_count;
+
+	return 1;
+}
+
+struct object_pool_t *object_pool_from_handle(object_pool_handle_t handle) {
+	if (handle == 0 || handle > _object_pool_vector.count) {
+		return NULL;
+	}
+
+	return *(struct object_pool_t **)(((char *)_object_pool_vector.data) + ((handle - 1) * sizeof(void *)));
+}
+
+void object_pool_global_list_add_free_handle(object_pool_handle_t handle) {
+	struct object_pool_free_handle_t *handle_struct = (struct object_pool_free_handle_t *)malloc(sizeof(struct object_pool_free_handle_t));
+	if (handle_struct == NULL) {
+		return;
+	}
+
+	handle_struct->handle = handle;
+
+	handle_struct->next = _object_pool_vector.free_handle_list;
+	_object_pool_vector.free_handle_list = handle_struct;
+}
+
+void object_pool_global_list_remove(object_pool_handle_t handle) {
+	if (handle != _object_pool_vector.count) {
+		object_pool_global_list_add_free_handle(handle);
+	}
+
+	_object_pool_vector.count--;
+}
+
+void *object_pool_get_block(struct object_pool_t *pool) {
+	if (pool == NULL) {
+		return NULL;
+	}
+
+	return ((char *)pool) + sizeof(struct object_pool_t);
+}
+
+void *object_pool_get_from_index(struct object_pool_t *pool, object_pool_index_t object_idx) {
+	if (pool == NULL || object_idx == 0 || object_idx > pool->total_count) {
+		return NULL;
+	}
+
+	return ((char *)object_pool_get_block(pool)) + ((object_idx - 1) * pool->structure_size);
+}
+
+void *object_pool_get_data(void *structure) {
+	if (structure == NULL) {
+		return NULL;
+	}
+
+	return ((char *)structure) + MEMORY_FOR_STRUCTURE_HEADERS;
+}
+
+object_pool_handle_t object_pool_create(object_pool_count_t object_count, object_pool_size_t object_size) {
+	struct object_pool_t *result;
 	size_t structure_size;
-	size_t i;
-	void *object_p;
 
-	if (pool == NULL) {
-		return -1;
-	}
-
-	/*
-
-	struct:
-		size_t length;
-		void data[data_length];
-		void *pool_ptr;
-		size_t next_offset;
-
-	*/
-
-	structure_size = sizeof(size_t) + object_size + sizeof(void *) + sizeof(size_t);
-	if (structure_size == 0) {
+	if (object_pool_create_will_overflow(object_count, object_size, &structure_size)) {
 		return 0;
-	}
-
-	pool->block = malloc(object_count * structure_size);
-	if (pool->block == NULL) {
-		return -1;
-	}
-
-	pool->last = (object_count - 1) * structure_size;
-
-	for (i = 0; i < object_count; i++) {
-		object_p = ((char *)pool->block) + (i * structure_size);
-
-		*((size_t *)object_p) = object_size;
-
-		memcpy(((char *)object_p) + sizeof(size_t) + object_size, &pool, sizeof(void *));
-
-		if (i != object_count - 1) {
-			*(size_t *)(((char *)object_p) + sizeof(size_t) + object_size + sizeof(void *)) = (i + 1) * structure_size;
-		}
-		else {
-			*(size_t *)(((char *)object_p) + sizeof(size_t) + object_size + sizeof(void *)) = pool->last + 1;
-		}
-	}
-
-	pool->head = 0;
-	pool->tail = pool->last;
-	pool->count = object_count;
-
-	return 0;
-}
-int object_pool_free(struct object_pool_t *pool) {
-	if (pool == NULL) {
-		return -1;
-	}
-
-	free(pool->block);
-	pool->block = NULL;
-
-	memset(pool, 0, sizeof(struct object_pool_t));
-	pool->head = pool->tail = 1;
-
-	return 0;
-}
-
-int object_pool_empty(struct object_pool_t *pool) {
-	return pool == NULL || pool->block == NULL || pool->head > pool->last;
-}
-
-size_t object_pool_capacity(struct object_pool_t *pool) {
-	return pool == NULL ? 0 : pool->count;
-}
-
-size_t object_pool_object_size(struct object_pool_t *pool) {
-	return pool == NULL || pool->block == NULL ? 0 : *(size_t *)(pool->block);
-}
-
-size_t object_pool_object_full_size(struct object_pool_t *pool) {
-	return pool == NULL || pool->block == NULL ? 0 : sizeof(size_t) + *(size_t *)(pool->block) + sizeof(void *) + sizeof(size_t);
-}
-
-size_t object_pool_memory_footprint(struct object_pool_t *pool) {
-	if (pool == NULL) {
-		return 0;
-	}
-
-	if (pool->block == NULL) {
-		return sizeof(struct object_pool_t);
-	}
-
-	return pool->count * (sizeof(size_t) + *(size_t *)(pool->block) + sizeof(void *) + sizeof(size_t));
-}
-
-#ifndef _OBJECT_POOL_DYNAMIC_IMPL
-
-void *object_pool_pop(struct object_pool_t *pool) {
-	void *result;
-
-	if (pool == NULL || pool->block == NULL) {
-		return NULL;
-	}
-
-	if (pool->head > pool->last) {
-		/* pool empty */
-		return NULL;
-	}
-
-	result = ((char *)pool->block) + pool->head;
-
-	pool->head = *(size_t *)(((char *)result) + sizeof(size_t) + (*(size_t *)(result)) + sizeof(void *));
-
-	if (pool->head > pool->last) {
-		pool->tail = pool->head;
-	}
-
-	return (void *)(((char *)result) + sizeof(size_t));
-}
-
-#else
-
-void *object_pool_get(struct object_pool_t *pool, size_t object_handle) {
-	if (pool == NULL || pool->block == NULL) {
-		return NULL;
-	}
-
-	return ((char *)pool->block) + (object_handle - 1) + sizeof(size_t);
-}
-
-int object_pool_handle_invalid(size_t object_handle) {
-	return object_handle == 0;
-}
-
-size_t object_pool_pop(struct object_pool_t *pool) {
-	void *object_p;
-	size_t result;
-
-	if (pool == NULL || pool->block == NULL) {
-		return 0;
-	}
-
-	if (pool->head > pool->last) {
-		/* pool empty */
-		return 0;
-	}
-
-	object_p = ((char *)pool->block) + pool->head;
-	result = pool->head + 1;
-
-	pool->head = *(size_t *)(((char *)object_p) + sizeof(size_t) + (*(size_t *)(object_p)) + sizeof(void *));
-
-	if (pool->head > pool->last) {
-		pool->tail = pool->head;
 	}
 	
-	return result;
-}
-
-int object_pool_push_handle(struct object_pool_t *pool, size_t object_handle) {
-	size_t object_size;
-	size_t object;
-
-	if (pool == NULL || pool->block == NULL || object_handle == 0) {
-		return -1;
-	}
-
-	object_size = *(size_t *)(pool->block);
-
-	object = ((char *)pool->block) + (object_handle - 1) + sizeof(size_t);
-
-	memcpy((void *)&pool, ((char *)object) + object_size, sizeof(void *));
-
-	*(size_t *)(((char *)object) + object_size + sizeof(void *)) = pool->head;
-	pool->head = (size_t)((((char *)object) - sizeof(size_t)) - (char *)pool->block);
-
-	return 0;
-}
-
-int object_pool_grow(struct object_pool_t *pool, size_t new_count) {
-	size_t object_size;
-	size_t structure_size;
-	void *temp_block;
-	size_t i;
-	void *object_p;
-
-	if (pool == NULL || pool->block == NULL || pool->count > new_count) {
-		return -1;
-	}
-
-	if (pool->count == new_count) {
+	result = (struct object_pool_t *)malloc(sizeof(struct object_pool_t) + (object_count * structure_size));
+	if (result == NULL) {
 		return 0;
 	}
 
-	object_size = (*(size_t *)pool->block);
-	structure_size = sizeof(size_t) + object_size + sizeof(void *) + sizeof(size_t);
+	result->next = NULL;
+	result->prev = NULL;
 
-	temp_block = realloc(pool->block, new_count * structure_size);
-	if (temp_block == NULL) {
-		return -1;
-	}
-	pool->block = temp_block;
+	result->head = 0;
 
-	if (pool->head > pool->last) {
-		pool->head = pool->count * structure_size;
-	}
+	result->free_count = 0;
+	result->active_count = 0;
+	result->total_count = object_count;
 
-	if (pool->tail <= pool->last) {
-		*(size_t *)(((char *)pool->block) + pool->tail + sizeof(size_t) + object_size + sizeof(void *)) = pool->count * structure_size;
-	}
+	result->structure_size = structure_size;
+	result->object_size = object_size;
 
-	pool->last = (new_count - 1) * structure_size;
-
-	for (i = pool->count; i < new_count; i++) {
-		object_p = ((char *)pool->block) + (i * structure_size);
-
-		*((size_t *)object_p) = object_size;
-
-		memcpy(((char *)object_p) + sizeof(size_t) + object_size, &pool, sizeof(void *));
-
-		if (i != new_count - 1) {
-			*(size_t *)(((char *)object_p) + sizeof(size_t) + object_size + sizeof(void *)) = (i + 1) * structure_size;
-		}
-		else {
-			*(size_t *)(((char *)object_p) + sizeof(size_t) + object_size + sizeof(void *)) = pool->last + 1;
-		}
+	if (!object_pool_global_list_add(result) || 
+		!object_pool_create_initialize_objects(result)) {
+		free(result);
+		return 0;
 	}
 
-	pool->tail = pool->last;
-	pool->count = new_count;
-
-	return 0;
+	return result->handle;
 }
-
-#endif
-
-int object_pool_push(void *object) {
-	size_t object_size;
+int object_pool_destroy(object_pool_handle_t handle) {
 	struct object_pool_t *pool;
 
-	if (object == NULL) {
-		return -1;
-	}
-
-	object_size = *(size_t *)(((char *)object) - sizeof(size_t));
-
-	memcpy((void *)&pool, ((char *)object) + object_size, sizeof(void *));
-
+	pool = object_pool_from_handle(handle);
 	if (pool == NULL) {
-		return -1;
+		return 0;
 	}
 
-	*(size_t *)(((char *)object) + object_size + sizeof(void *)) = pool->head;
-	pool->head = (size_t)((((char *)object) - sizeof(size_t)) - (char *)pool->block);
+	free(pool);
 
-	return 0;
+	object_pool_global_list_remove(handle);
+
+	return 1;
+}
+
+void *object_pool_pop(object_pool_handle_t handle) {
+	struct object_pool_t *pool;
+	void *result;
+
+	pool = object_pool_from_handle(handle);
+	if (pool == NULL || pool->free_count == 0) {
+		return NULL;
+	}
+
+	result = object_pool_get_from_index(pool, pool->head);
+	if (result == NULL) {
+		return NULL;
+	}
+	
+	pool->head = *(object_pool_index_t *)(((char *)result) + sizeof(object_pool_handle_t));
+
+	pool->free_count--;
+	pool->active_count++;
+
+	return object_pool_get_data(result);
+}
+
+int object_pool_push(void *object) {
+	void *object_structure;
+	struct object_pool_t *pool;
+	object_pool_index_t *index_p;
+
+	object_structure = ((char *)object) - MEMORY_FOR_STRUCTURE_HEADERS;
+
+	if (object == NULL || (pool = object_pool_from_handle(*(object_pool_handle_t *)(object_structure))) == NULL) {
+		return 0;
+	}
+	
+	*(object_pool_index_t *)(((char *)object_structure) + sizeof(object_pool_handle_t)) = pool->head;
+	pool->head = ((((char *)object_structure) - ((char *)object_pool_get_block(pool))) / pool->structure_size) + 1;
+
+	pool->free_count++;
+	pool->active_count--;
+
+	return 1;
+}
+
+object_pool_count_t object_pool_free_count(object_pool_handle_t handle) {
+	struct object_pool_t *pool;
+	pool = object_pool_from_handle(handle);
+	return pool == NULL ? 0 : pool->free_count;
+}
+
+object_pool_count_t object_pool_active_count(object_pool_handle_t handle) {
+	struct object_pool_t *pool;
+	pool = object_pool_from_handle(handle);
+	return pool == NULL ? 0 : pool->active_count;
+}
+
+object_pool_count_t object_pool_total_count(object_pool_handle_t handle) {
+	struct object_pool_t *pool;
+	pool = object_pool_from_handle(handle);
+	return pool == NULL ? 0 : pool->total_count;
+}
+
+object_pool_count_t object_pool_object_size(object_pool_handle_t handle) {
+	struct object_pool_t *pool;
+	pool = object_pool_from_handle(handle);
+	return pool == NULL ? 0 : pool->object_size;
 }

@@ -20,12 +20,12 @@ The goal is predictable performance and minimal allocation overhead in long-runn
 # Core Concept
 ## Instead of repeatedly allocating and freeing memory, a block of objects is allocated once and reused.
 
-###  pop → take an object from the pool
+### pop → take an object from the pool
 ### use it
 ### push → return it to the pool
 
 ## Example
-**A full working example is provided in:**
+**A full working example of the life cycle is provided in:**
 **example.c**
 
 ## Potential Use Cases

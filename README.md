@@ -1,6 +1,6 @@
 # Object Pool (C)
 
-## C89-compliant low-overhead fixed-size object pool for C, designed for systems and performance-critical software, providing a simple API with deterministic O(1) allocation and reuse of preallocated objects, reducing heap fragmentation.
+## A simple C89-compatible fixed-size object pool that preallocates memory and lets you reuse objects in O(1) time, avoiding heap allocations and reducing fragmentation for better performance.
 
 # Overview
 

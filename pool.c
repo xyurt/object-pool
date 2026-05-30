@@ -193,30 +193,6 @@ int object_pool_push_handle(struct object_pool_t *pool, size_t object_handle) {
 	return 0;
 }
 
-#endif
-
-int object_pool_push(void *object) {
-	size_t object_size;
-	struct object_pool_t *pool;
-
-	if (object == NULL) {
-		return -1;
-	}
-
-	object_size = *(size_t *)(((char *)object) - sizeof(size_t));
-
-	memcpy((void *)&pool, ((char *)object) + object_size, sizeof(void *));
-
-	if (pool == NULL) {
-		return -1;
-	}
-
-	*(size_t *)(((char *)object) + object_size + sizeof(void *)) = pool->head;
-	pool->head = (size_t)((((char *)object) - sizeof(size_t)) - (char *)pool->block);
-
-	return 0;
-}
-
 int object_pool_grow(struct object_pool_t *pool, size_t new_count) {
 	size_t object_size;
 	size_t structure_size;
@@ -268,6 +244,30 @@ int object_pool_grow(struct object_pool_t *pool, size_t new_count) {
 
 	pool->tail = pool->last;
 	pool->count = new_count;
+
+	return 0;
+}
+
+#endif
+
+int object_pool_push(void *object) {
+	size_t object_size;
+	struct object_pool_t *pool;
+
+	if (object == NULL) {
+		return -1;
+	}
+
+	object_size = *(size_t *)(((char *)object) - sizeof(size_t));
+
+	memcpy((void *)&pool, ((char *)object) + object_size, sizeof(void *));
+
+	if (pool == NULL) {
+		return -1;
+	}
+
+	*(size_t *)(((char *)object) + object_size + sizeof(void *)) = pool->head;
+	pool->head = (size_t)((((char *)object) - sizeof(size_t)) - (char *)pool->block);
 
 	return 0;
 }

@@ -24,7 +24,7 @@ The goal is predictable performance and minimal allocation overhead in long-runn
 ### use it
 ### push → return it to the pool
 
-## Example
+# Example
 **A full working example of the life cycle is provided in:**
 **example.c**
 

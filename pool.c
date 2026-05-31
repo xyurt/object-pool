@@ -3,7 +3,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-/* Constant values must not be changed */
 #define MAX_TOTAL_MEMORY_FOR_STRUCTURES (SIZE_MAX - sizeof(struct object_pool_t))
 
 #define MEMORY_FOR_STRUCTURE_HEADERS (sizeof(object_pool_handle_t) + sizeof(object_pool_index_t))
@@ -37,6 +36,7 @@ struct object_pool_vector_t {
 };
 
 struct object_pool_vector_t _object_pool_vector;
+struct object_pool_t *last_pool;
 
 /*
 
@@ -44,7 +44,7 @@ Index zero is reserved for NULL check
 
 struct:
 	object_pool_handle_t pool_handle;
-	object_pool_index_t next_idx;
+	object_pool_index_t next_idx; /* When popped next_idx will point to the struct's index instead of the next, this alone gives 2-3x performance than to do division on block
 	void data[data_length];
 
 */
@@ -187,14 +187,6 @@ char object_pool_create_initialize_objects(struct object_pool_t *pool) {
 	return 1;
 }
 
-struct object_pool_t *object_pool_from_handle(object_pool_handle_t handle) {
-	if (handle == 0 || handle > _object_pool_vector.capacity) {
-		return NULL;
-	}
-
-	return *(struct object_pool_t **)(((char *)_object_pool_vector.data) + ((handle - 1) * sizeof(void *)));
-}
-
 void object_pool_global_list_add_free_handle(object_pool_handle_t handle) {
 	struct object_pool_free_handle_t *handle_struct = (struct object_pool_free_handle_t *)malloc(sizeof(struct object_pool_free_handle_t));
 	if (handle_struct == NULL) {
@@ -294,6 +286,10 @@ int object_pool_destroy(object_pool_handle_t handle) {
 		return 0;
 	}
 
+	if (last_pool == pool) {
+		last_pool = NULL;
+	}
+
 	free(pool);
 
 	object_pool_global_list_remove(handle);
@@ -301,9 +297,75 @@ int object_pool_destroy(object_pool_handle_t handle) {
 	return 1;
 }
 
+const void *object_pool_from_handle(object_pool_handle_t handle) {
+	if (handle == 0 || handle > _object_pool_vector.capacity) {
+		return NULL;
+	}
+
+	if (last_pool == NULL || last_pool->handle != handle) {
+		last_pool = *(struct object_pool_t **)(((char *)_object_pool_vector.data) + ((handle - 1) * sizeof(void *)));
+	}
+
+	return last_pool;
+}
+
+void *object_pool_ptr_pop(void *pool_ptr) {
+	void *result;
+	object_pool_index_t *next_idx_p;
+	object_pool_index_t self_idx;
+
+	if (pool_ptr == NULL) {
+		return NULL;
+	}
+
+	result = object_pool_get_from_index(pool_ptr, ((struct object_pool_t *)pool_ptr)->head);
+	if (result == NULL) {
+		return NULL;
+	}
+	self_idx = ((struct object_pool_t *)pool_ptr)->head;
+
+	next_idx_p = (object_pool_index_t *)(((char *)result) + sizeof(object_pool_handle_t));
+
+	((struct object_pool_t *)pool_ptr)->head = *next_idx_p;
+	*next_idx_p = self_idx;
+
+	((struct object_pool_t *)pool_ptr)->free_count--;
+	((struct object_pool_t *)pool_ptr)->active_count++;
+
+	return object_pool_get_data(result);
+}
+
+int object_pool_ptr_push(void *pool_ptr, void *object) {
+	void *object_structure;
+	object_pool_index_t *next_idx_p;
+	object_pool_index_t next_idx;
+
+	if (pool_ptr == NULL) {
+		return 0;
+	}
+
+	if (object == NULL) {
+		return 0;
+	}
+
+	next_idx_p = (object_pool_index_t *)((((char *)object) - MEMORY_FOR_STRUCTURE_HEADERS) + sizeof(object_pool_handle_t));
+	next_idx = ((struct object_pool_t *)(pool_ptr))->head;
+
+	((struct object_pool_t *)pool_ptr)->head = *next_idx_p;
+
+	*next_idx_p = next_idx;
+
+	((struct object_pool_t *)pool_ptr)->free_count++;
+	((struct object_pool_t *)pool_ptr)->active_count--;
+
+	return 1;
+}
+
 void *object_pool_pop(object_pool_handle_t handle) {
 	struct object_pool_t *pool;
 	void *result;
+	object_pool_index_t *next_idx_p;
+	object_pool_index_t self_idx;
 
 	pool = object_pool_from_handle(handle);
 	if (pool == NULL || pool->free_count == 0) {
@@ -314,8 +376,12 @@ void *object_pool_pop(object_pool_handle_t handle) {
 	if (result == NULL) {
 		return NULL;
 	}
+	self_idx = pool->head;
 
-	pool->head = *(object_pool_index_t *)(((char *)result) + sizeof(object_pool_handle_t));
+	next_idx_p = (object_pool_index_t *)(((char *)result) + sizeof(object_pool_handle_t));
+
+	pool->head = *next_idx_p;
+	*next_idx_p = self_idx;
 
 	pool->free_count--;
 	pool->active_count++;
@@ -326,21 +392,38 @@ void *object_pool_pop(object_pool_handle_t handle) {
 int object_pool_push(void *object) {
 	void *object_structure;
 	struct object_pool_t *pool;
-	object_pool_index_t *index_p;
+	object_pool_index_t *next_idx_p;
+	object_pool_index_t next_idx;
 
-	object_structure = ((char *)object) - MEMORY_FOR_STRUCTURE_HEADERS;
-
-	if (object == NULL || (pool = object_pool_from_handle(*(object_pool_handle_t *)(object_structure))) == NULL) {
+	if (object == NULL) {
 		return 0;
 	}
 
-	*(object_pool_index_t *)(((char *)object_structure) + sizeof(object_pool_handle_t)) = pool->head;
-	pool->head = ((((char *)object_structure) - ((char *)object_pool_get_block(pool))) / pool->structure_size) + 1;
+	object_structure = ((char *)object) - MEMORY_FOR_STRUCTURE_HEADERS;
+
+	if ((pool = object_pool_from_handle(*(object_pool_handle_t *)(object_structure))) == NULL) {
+		return 0;
+	}
+
+	next_idx_p = (object_pool_index_t *)(((char *)object_structure) + sizeof(object_pool_handle_t));
+	next_idx = pool->head;
+
+	pool->head = *next_idx_p;
+
+	*next_idx_p = next_idx;
 
 	pool->free_count++;
 	pool->active_count--;
 
 	return 1;
+}
+
+object_pool_handle_t object_pool_owns(const void *object) {
+	if (object == NULL) {
+		return 0;
+	}
+
+	return *(object_pool_handle_t *)(((char *)object) - MEMORY_FOR_STRUCTURE_HEADERS);
 }
 
 object_pool_count_t object_pool_free_count(object_pool_handle_t handle) {
@@ -365,4 +448,8 @@ object_pool_size_t object_pool_object_size(object_pool_handle_t handle) {
 	struct object_pool_t *pool;
 	pool = object_pool_from_handle(handle);
 	return pool == NULL ? 0 : pool->object_size;
+}
+
+object_pool_size_t object_pool_overhead_size() {
+	return MEMORY_FOR_STRUCTURE_HEADERS;
 }

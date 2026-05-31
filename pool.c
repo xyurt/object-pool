@@ -309,7 +309,7 @@ const void *object_pool_from_handle(object_pool_handle_t handle) {
 	return last_pool;
 }
 
-void *object_pool_ptr_pop(void *pool_ptr) {
+void *object_pool_ptr_pop(object_pool_ptr pool_ptr) {
 	void *result;
 	object_pool_index_t *next_idx_p;
 	object_pool_index_t self_idx;
@@ -335,7 +335,7 @@ void *object_pool_ptr_pop(void *pool_ptr) {
 	return object_pool_get_data(result);
 }
 
-int object_pool_ptr_push(void *pool_ptr, void *object) {
+int object_pool_ptr_push(object_pool_ptr pool_ptr, void *object) {
 	void *object_structure;
 	object_pool_index_t *next_idx_p;
 	object_pool_index_t next_idx;

@@ -361,7 +361,7 @@ object_pool_count_t object_pool_total_count(object_pool_handle_t handle) {
 	return pool == NULL ? 0 : pool->total_count;
 }
 
-object_pool_count_t object_pool_object_size(object_pool_handle_t handle) {
+object_pool_size_t object_pool_object_size(object_pool_handle_t handle) {
 	struct object_pool_t *pool;
 	pool = object_pool_from_handle(handle);
 	return pool == NULL ? 0 : pool->object_size;

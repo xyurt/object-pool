@@ -37,8 +37,7 @@ They operate with the raw pointer of the object pool
 which boosts up the performance significantly
 
 The raw pointer of the object pool can be 
-retrieved with the function:
-**object_pool_from_handle(handle)**
+retrieved with the function **object_pool_from_handle(handle)**
 
 ## Potential Use Cases
 - Game engines (entities, particles, bullets)

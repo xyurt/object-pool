@@ -70,6 +70,6 @@ object_pool_count_t object_pool_total_count(object_pool_handle_t handle);
 /*
 Returns the object size
 */
-object_pool_count_t object_pool_object_size(object_pool_handle_t handle);
+object_pool_size_t object_pool_object_size(object_pool_handle_t handle);
 
 #endif /* _OBJECT_POOL_H */

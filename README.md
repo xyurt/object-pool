@@ -1,6 +1,6 @@
 # Object Pool (C)
 
-## A simple C89-compatible fixed-size object pool that preallocates memory and lets you reuse objects in O(1) time, avoiding heap allocations and reducing fragmentation for better performance.
+## A simple C89-compatible fixed-size object pool.
 
 # Overview
 
@@ -33,7 +33,6 @@ The goal is predictable performance and minimal allocation overhead in long-runn
 - Embedded systems
 - High-frequency allocation workloads
 - Real-time systems
-- Anything else that comes to mind
 
 # License
 **MIT**

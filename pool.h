@@ -39,6 +39,7 @@ int object_pool_destroy(object_pool_handle_t handle);
 
 /*
 Pops an object from the pool
+- Returns NULL if the pool is exhausted
 - The object's ownership is strictly pool's
 - Object must not be freed
 - Read and write operations must be within the object bounds

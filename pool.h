@@ -45,8 +45,9 @@ typedef object_pool_index_t object_pool_count_t;
 typedef size_t object_pool_size_t;
 
 typedef object_pool_handle_t object_pool;
+typedef const void *object_pool_ptr;
 
-#define OBJECT_POOL_INVALID_HANDLE (0)
+#define OBJECT_POOL_INVALID (0)
 
 object_pool_handle_t object_pool_create(object_pool_count_t object_count, object_pool_size_t object_size);
 
@@ -63,7 +64,7 @@ Returns the raw pointer of the object pool structure
 - Must only be used as the arguments of object_pool_ptr_pop and object_pool_ptr_push
 - Using the functions that use the raw pointers are faster
 */
-const void *object_pool_from_handle(object_pool_handle_t handle);
+object_pool_ptr object_pool_from_handle(object_pool_handle_t handle);
 
 /*
 Pops an object from the pool
@@ -73,14 +74,14 @@ Pops an object from the pool
 - Read and write operations must be within the object bounds
 - Passing an invalid pool pointer is undefined behaviour
 */
-void *object_pool_ptr_pop(void *pool_ptr);
+void *object_pool_ptr_pop(object_pool_ptr pool_ptr);
 
 /*
 Push an object back to the pool
 - Invalidates the object pointer
 - Passing an invalid pool pointer or an object pointer is undefined behaviour
 */
-int object_pool_ptr_push(void *pool_ptr, void *object);
+int object_pool_ptr_push(object_pool_ptr pool_ptr, void *object);
 
 /*
 Pops an object from the pool

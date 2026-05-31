@@ -5,54 +5,50 @@
 
 #include <stddef.h>
 
-typedef size_t object_pool_index_t; 
-/* 
+typedef size_t object_pool_index_t;
+/*
 - Internal pool index storage size
-- changing this will change the overhead size and the maximum amount of objects in a pool 
+- this can be changed and changing this will change the overhead size and the maximum amount of objects in a pool
 */
 
 typedef object_pool_index_t object_pool_count_t;
 
-typedef size_t object_pool_size_t; 
-/* 
-- Size_t alternative
-- can be modified but changes nothing 
-*/
+typedef size_t object_pool_size_t; /* Size_t alternative */
 
-typedef unsigned char object_pool_handle_t; 
-/* 
-- unsigned char allows 256 different handle IDs (0–255), and they can be reused. 
-- changing this will change the overhead size
+typedef unsigned char object_pool_handle_t;
+/*
+- unsigned char allows 256 different handle IDs (0–255), and they can be reused.
+- this can be changed and changing this will change the overhead size
 */
 
 typedef object_pool_handle_t object_pool;
 
-/* 
+/*
 Creates an object pool
 - Returns an object pool handle on success, zero on failure
-- Arguments must be more than zero 
+- Arguments must be more than zero
 */
 object_pool_handle_t object_pool_create(object_pool_count_t object_count, object_pool_size_t object_size);
 
-/* 
+/*
 Destroys an object pool and invalidates the handle
-- Returns 1 if success else 0 
-- Passing an invalid handle is undefined behaviour 
+- Returns 1 if success else 0
+- Passing an invalid handle is undefined behaviour
 */
 int object_pool_destroy(object_pool_handle_t handle);
 
-/* 
-Pops an object from the pool 
+/*
+Pops an object from the pool
 - The object's ownership is strictly pool's
 - Object must not be freed
 - Read and write operations must be within the object bounds
-- Passing an invalid handle is undefined behaviour 
+- Passing an invalid handle is undefined behaviour
 */
 void *object_pool_pop(object_pool_handle_t handle);
 
-/* 
-Push an object back to the pool 
-- Invalidates the object pointer 
+/*
+Push an object back to the pool
+- Invalidates the object pointer
 */
 int object_pool_push(void *object);
 

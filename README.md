@@ -31,8 +31,7 @@ The goal is predictable performance and minimal allocation overhead in long-runn
 Aside from the basic and ergonomic API 
 you can also use the function variants:
 
-**object_pool_ptr_pop(pool_ptr)** 
-**object_pool_ptr_push(pool_ptr, object)**
+**object_pool_ptr_pop(pool_ptr) / object_pool_ptr_push(pool_ptr, object)**
 
 They operate with the raw pointer of the object pool
 which boosts up the performance significantly

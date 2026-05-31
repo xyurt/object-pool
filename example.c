@@ -15,6 +15,9 @@ void packet_send(packet *pkt) {
 int main(int argc, char *argv[]) {
  
 	object_pool pool = object_pool_create(1024, sizeof(packet));
+	if (pool == OBJECT_POOL_INVALID) {
+		return 1;
+	}
 
 	packet *packet_p = object_pool_pop(pool);
 	if (packet_p != NULL) {

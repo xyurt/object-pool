@@ -27,7 +27,7 @@ The goal is predictable performance and minimal allocation overhead in long-runn
 **A full working example of the life cycle is provided in:**
 **example.c**
 
-# Function Variants
+# Function Variants - Performance
 Aside from the basic and ergonomic API 
 you can also use the function variants:
 

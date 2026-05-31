@@ -24,14 +24,12 @@ int main(int argc, char *argv[]) {
 
 		packet_send(packet_p);
 
-		/* Pointer becomes invalid after this call */
 		object_pool_push(packet_p);
 	}
 	else {
 		printf("Pool exhausted or allocation failure.\n");
 	}
 
-/* Handle becomes invalid after this call */
 	object_pool_destroy(pool);
 
 	return 0;

@@ -27,6 +27,12 @@ The goal is predictable performance and minimal allocation overhead in long-runn
 **A full working example of the life cycle is provided in:**
 **example.c**
 
+# Function Variants
+Aside from the basic and ergonomic API you can also use the function variants:
+**object_pool_ptr_pop(pool_ptr)** and **object_pool_ptr_push(pool_ptr, object)**
+They operate with the raw pointer of the object pool which boosts up the performance significantly
+The raw pointer of the object pool can be retrieved with the function **object_pool_from_handle(handle)**
+
 ## Potential Use Cases
 - Game engines (entities, particles, bullets)
 - Networking (packet reuse)

@@ -154,7 +154,7 @@ char object_pool_global_list_add(struct object_pool_t *pool) {
 	}
 
 	object_pool_global_list_get_free_handle(&handle);
-	
+
 	*(void **)(((char *)_object_pool_vector.data) + ((handle - 1) * sizeof(void *))) = pool;
 	pool->handle = handle;
 
@@ -188,7 +188,7 @@ char object_pool_create_initialize_objects(struct object_pool_t *pool) {
 }
 
 struct object_pool_t *object_pool_from_handle(object_pool_handle_t handle) {
-	if (handle == 0 || handle > _object_pool_vector.count) {
+	if (handle == 0 || handle > _object_pool_vector.capacity) {
 		return NULL;
 	}
 
@@ -208,11 +208,25 @@ void object_pool_global_list_add_free_handle(object_pool_handle_t handle) {
 }
 
 void object_pool_global_list_remove(object_pool_handle_t handle) {
+	struct object_pool_free_handle_t *next_handle;
+
 	if (handle != _object_pool_vector.count) {
 		object_pool_global_list_add_free_handle(handle);
 	}
 
 	_object_pool_vector.count--;
+
+	if (_object_pool_vector.count == 0) {
+		for (;;) {
+			if (_object_pool_vector.free_handle_list == NULL) {
+				break;
+			}
+
+			next_handle = _object_pool_vector.free_handle_list->next;
+			free(_object_pool_vector.free_handle_list);
+			_object_pool_vector.free_handle_list = next_handle;
+		}
+	}
 }
 
 void *object_pool_get_block(struct object_pool_t *pool) {
@@ -246,7 +260,7 @@ object_pool_handle_t object_pool_create(object_pool_count_t object_count, object
 	if (object_pool_create_will_overflow(object_count, object_size, &structure_size)) {
 		return 0;
 	}
-	
+
 	result = (struct object_pool_t *)malloc(sizeof(struct object_pool_t) + (object_count * structure_size));
 	if (result == NULL) {
 		return 0;
@@ -264,7 +278,7 @@ object_pool_handle_t object_pool_create(object_pool_count_t object_count, object
 	result->structure_size = structure_size;
 	result->object_size = object_size;
 
-	if (!object_pool_global_list_add(result) || 
+	if (!object_pool_global_list_add(result) ||
 		!object_pool_create_initialize_objects(result)) {
 		free(result);
 		return 0;
@@ -300,7 +314,7 @@ void *object_pool_pop(object_pool_handle_t handle) {
 	if (result == NULL) {
 		return NULL;
 	}
-	
+
 	pool->head = *(object_pool_index_t *)(((char *)result) + sizeof(object_pool_handle_t));
 
 	pool->free_count--;
@@ -319,7 +333,7 @@ int object_pool_push(void *object) {
 	if (object == NULL || (pool = object_pool_from_handle(*(object_pool_handle_t *)(object_structure))) == NULL) {
 		return 0;
 	}
-	
+
 	*(object_pool_index_t *)(((char *)object_structure) + sizeof(object_pool_handle_t)) = pool->head;
 	pool->head = ((((char *)object_structure) - ((char *)object_pool_get_block(pool))) / pool->structure_size) + 1;
 

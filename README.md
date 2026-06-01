@@ -8,14 +8,6 @@ This library implements a fixed-size object pool that preallocates memory for a 
 
 The goal is predictable performance and minimal allocation overhead in long-running or high-frequency allocation environments.
 
-## Features
-- C89 compatible
-- Fixed-size object pooling
-- Simple push/pop API
-- O(1) allocation and deallocation
-- Reduced heap fragmentation through reuse
-- Lightweight design for systems and embedded use
-
 # Core Concept
 **Instead of repeatedly allocating and freeing memory, a block of objects is allocated once and reused.**
 

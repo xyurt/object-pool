@@ -31,6 +31,9 @@ which boosts up the performance significantly
 The raw pointer of the object pool can be 
 retrieved with **object_pool_from_handle(handle)**
 
+# Overhead
+You can customize the overhead types thus their sizes with definitions documented in pool.h
+
 ## Potential Use Cases
 - Game engines (entities, particles, bullets)
 - Networking (packet reuse)

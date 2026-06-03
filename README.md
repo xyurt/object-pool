@@ -24,11 +24,13 @@ typedef struct packet_t {
 	int length;
 } packet;
 
-void packet_send(packet *pkt) {
+void packet_send(packet *pkt)
+{
 	printf("%.*s\n", pkt->length, pkt->payload);
 }
 
-int main(int argc, char *argv[]) {
+int main(int argc, char *argv[])
+{
 	object_pool_t pool;
 	if (object_pool_init(&pool, 1024, sizeof(packet)) < 0) {
 		printf("Object pool initialization failed.\n");
@@ -36,7 +38,7 @@ int main(int argc, char *argv[]) {
 	}
 
 	packet *packet_p = object_pool_acquire(&pool);
-	if (packet_p != NULL) {
+	if (packet_p) {
 		const char *packet_payload = "Hello, World!";
 		packet_p->length = strlen(packet_payload);
 		memcpy(packet_p->payload, packet_payload, packet_p->length);

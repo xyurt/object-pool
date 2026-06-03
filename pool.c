@@ -30,7 +30,7 @@ int object_pool_cleanup(struct object_pool *pool)
 	if (!pool)
 		return -EINVAL;
 
-	free(pool->block);
+	OBJECT_POOL_FREE(pool->block);
 	pool->block = NULL;
 	pool->head = 0;
 	

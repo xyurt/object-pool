@@ -59,7 +59,6 @@ int main(void)
 
 # Definitions
 **To use custom allocators use OBJECT_POOL_MALLOC and OBJECT_POOL_FREE.**
-**To changing the index type of the objects use OBJECT_POOL_INDEX_TYPE. Its default value is size_t. Changing this will change the header size of each object.**
 
 ## Potential Use Cases
 - Game engines (entities, particles, bullets)

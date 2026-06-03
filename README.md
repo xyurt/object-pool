@@ -19,10 +19,10 @@ This library implements a fixed-size object pool that preallocates memory for a 
 
 #include "pool.h"
 
-typedef struct packet_t {
+typedef struct packet {
 	char payload[2048];
 	int length;
-} packet;
+} packet_t;
 
 void packet_send(packet *pkt)
 {
@@ -37,7 +37,7 @@ int main(void)
 		return -1;
 	}
 
-	packet *packet_p = object_pool_acquire(&pool);
+	packet_t *packet_p = object_pool_acquire(&pool);
 	if (packet_p) {
 		const char *packet_payload = "Hello, World!";
 		packet_p->length = strlen(packet_payload);

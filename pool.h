@@ -1,134 +1,76 @@
-/* object_pool by xyurt */
-
 #ifndef _OBJECT_POOL_H
 #define _OBJECT_POOL_H
 
-#include <stddef.h>
+#if defined(OBJECT_POOL_MALLOC) ^ defined(OBJECT_POOL_FREE)
+#error OBJECT_POOL_MALLOC and OBJECT_POOL_FREE both need to be defined in order to use custom allocators
+#endif
 
-/*
- 
-Changing the types of the internal overhead variables (changes the overhead size)
+#ifndef OBJECT_POOL_MALLOC
+#include <stdlib.h>
+#define OBJECT_POOL_MALLOC malloc
+#define OBJECT_POOL_FREE free
+#endif
 
-Use this globally or in this header file:
-#define OBJECT_POOL_TYPE_MODIFY
-#define OBJECT_POOL_INDEX_TYPE size_t
-#define OBJECT_POOL_HANDLE_TYPE unsigned char
-
-The OBJECT_POOL_INDEX_TYPE definition value sets the max amount of objects a pool can theoretically have
-Changing this will change the first argument type of object_pool_create() 
-if you set it to size_t you can have up to (SIZE_MAX - 1) objects in a single pool
-if you set it to unsigned long you can have up to (ULONG_MAX - 1) objects in a single pool
-
-The OBJECT_POOL_HANDLE_TYPE definition value sets the max amount of pools that can be created, the pool handles are reused after object_pool_destroy() 
-if you set it to size_t you can have up to (SIZE_MAX - 1) pools
-if you set it to unsigned long you can have up to (ULONG_MAX - 1) pools
-
-*/
-
-#ifndef OBJECT_POOL_TYPE_MODIFY 
-#define OBJECT_POOL_INDEX_TYPE size_t
-#define OBJECT_POOL_HANDLE_TYPE unsigned char
-#else
 #ifndef OBJECT_POOL_INDEX_TYPE
-#error OBJECT_POOL_INDEX_TYPE must be defined
-#endif
-
-#ifndef OBJECT_POOL_HANDLE_TYPE
-#error OBJECT_POOL_HANDLE_TYPE must be defined
-#endif
+#define OBJECT_POOL_INDEX_TYPE size_t
 #endif
 
 typedef OBJECT_POOL_INDEX_TYPE object_pool_index_t;
-typedef OBJECT_POOL_HANDLE_TYPE object_pool_handle_t;
-
 typedef object_pool_index_t object_pool_count_t;
-typedef size_t object_pool_size_t;
 
-typedef object_pool_handle_t object_pool;
-typedef const void *object_pool_ptr;
+struct object_pool {
+	char *block;
+	object_pool_index_t head;
+	object_pool_count_t count;
+	size_t struct_size;
+	size_t object_size;
+};
 
-#define OBJECT_POOL_INVALID (0)
+typedef struct object_pool object_pool_t;
 
-object_pool_handle_t object_pool_create(object_pool_count_t object_count, object_pool_size_t object_size);
+/**
+ * object_pool_init(struct object_pool *pool, object_pool_count_t count, size_t object_size) - Initializes the object pool structure
+ * @pool: Pointer of the pool structure. Must not be NULL.
+ * @count: Object count to be allocated. Must be more than zero.
+ * @object_size: Each object's size. Must be more than zero.
+ *
+ * Initializes the object pool structure, allocates the objects and sets the each object's headers.
+ *
+ * Return: Returns 0 on success. If arguments are invalid returns -EINVAL. If malloc fails, returns -ENOMEM.
+ */
+int object_pool_init(struct object_pool *pool, object_pool_count_t count, size_t object_size);
 
-/*
-Destroys an object pool and its object pointers and invalidates the handle
-- Returns 1 if success else 0
-- Passing an invalid handle is undefined behaviour
-- Using an object pointer belonging to a destroyed pool after destroy is undefined behaviour
-*/
-int object_pool_destroy(object_pool_handle_t handle);
+/**
+ * object_pool_cleanup(struct object_pool *pool) - Cleans up the object pool structure
+ * @pool: Pointer of the pool structure. Must not be NULL.
+ *
+ * Cleans up the object pool structure, resets it and frees the objects. Cleanup, does not require the objects to be released.
+ * All acquired object pointers are invalid after cleanup.
+ *
+ * Return: Returns 0 on success. If arguments are invalid returns -EINVAL.
+ */
+int object_pool_cleanup(struct object_pool *pool);
 
-/*
-Returns the raw pointer of the object pool structure
-- Must only be used as the arguments of object_pool_ptr_pop and object_pool_ptr_push
-- Using the functions that use the raw pointers are faster
-*/
-object_pool_ptr object_pool_from_handle(object_pool_handle_t handle);
+/**
+ * object_pool_acquire(struct object_pool *pool) - Acquires an object from the object pool
+ * @pool: Pointer of the pool structure. Must not be NULL.
+ *
+ * Acquires an object from the object pool.
+ *
+ * Return: Returns the object acquired, on success. If the pool is exhausted, arguments are invalid or if an error occurs returns NULL.
+ */
+void *object_pool_acquire(struct object_pool *pool);
 
-/*
-Pops an object from the pool
-- Returns NULL if the pool is exhausted
-- The object's ownership is strictly pool's
-- Object must not be freed
-- Read and write operations must be within the object bounds
-- Passing an invalid pool pointer is undefined behaviour
-*/
-void *object_pool_ptr_pop(object_pool_ptr pool_ptr);
-
-/*
-Push an object back to the pool
-- Invalidates the object pointer
-- Passing an invalid pool pointer or an object pointer is undefined behaviour
-*/
-int object_pool_ptr_push(object_pool_ptr pool_ptr, void *object);
-
-/*
-Pops an object from the pool
-- Returns NULL if the pool is exhausted
-- The object's ownership is strictly pool's
-- Object must not be freed
-- Read and write operations must be within the object bounds
-- Passing an invalid handle is undefined behaviour
-*/
-void *object_pool_pop(object_pool_handle_t handle);
-
-/*
-Push an object back to the pool
-- Invalidates the object pointer
-- Passing an invalid object pointer is undefined behaviour
-*/
-int object_pool_push(void *object);
-
-/*
-Returns the pool handle of the object
-- Returns 0 on failure
-*/
-object_pool_handle_t object_pool_owns(const void *object);
-
-/*
-Returns the amount of objects that are waiting to be popped and free
-*/
-object_pool_count_t object_pool_free_count(object_pool_handle_t handle);
-
-/*
-Returns the amount of objects that are in use
-*/
-object_pool_count_t object_pool_active_count(object_pool_handle_t handle);
-
-/*
-Returns the total amount of objects
-*/
-object_pool_count_t object_pool_total_count(object_pool_handle_t handle);
-
-/*
-Returns the object size
-*/
-object_pool_size_t object_pool_object_size(object_pool_handle_t handle);
-
-/*
-Returns the overhead size of one object in a pool
-*/
-object_pool_size_t object_pool_overhead_size();
+/**
+ * object_pool_release(struct object_pool *pool, void *object) - Releases an acquired object from the object pool
+ * @pool: Pointer of the pool structure. Must not be NULL.
+ * @object: Pointer of the object acquired. Must not be NULL.
+ * 
+ * Releases an acquired object from the object pool. Double release is handled without error.
+ * Object pointer is invalid after release.
+ *
+ * Return: Returns 0 on success. If arguments are invalid returns -EINVAL.
+ */
+int object_pool_release(struct object_pool *pool, void *object);
 
 #endif /* _OBJECT_POOL_H */

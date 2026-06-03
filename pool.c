@@ -4,19 +4,34 @@
 #include <stddef.h>
 #include <errno.h>
 
+#define ALIGNMENT (sizeof(void *))
+#define ALIGN(x) (((x) + (ALIGNMENT - 1)) & ~(ALIGNMENT - 1))
+
+#ifdef OBJECT_POOL_NO_ALIGN
+#define ALIGN_ENABLED 0
+#else
+#define ALIGN_ENABLED 1
+#endif
+
 static void object_pool_offsets_init(struct object_pool *pool);
 
-int object_pool_init(struct object_pool *pool, object_pool_count_t count, size_t object_size) 
+int object_pool_init(struct object_pool *pool, size_t count, size_t object_size)
 {
+	size_t struct_size = sizeof(size_t) + object_size;
+
+	if (ALIGN_ENABLED) {
+		struct_size = ALIGN(struct_size);
+	}
+
 	if (!pool || count == 0 || object_size == 0)
 		return -EINVAL;
 
-	pool->block = OBJECT_POOL_MALLOC(count * (object_size + sizeof(object_pool_index_t)));
+	pool->block = OBJECT_POOL_MALLOC(count * struct_size);
 	if (!pool->block)
 		return -ENOMEM;
 
 	pool->count = count;
-	pool->struct_size = object_size + sizeof(object_pool_index_t);
+	pool->struct_size = struct_size;
 
 	object_pool_offsets_init(pool);
 
@@ -43,11 +58,11 @@ int object_pool_cleanup(struct object_pool *pool)
 
 void *object_pool_acquire(struct object_pool *pool) 
 {
-	object_pool_index_t head;
+	size_t head;
 	size_t struct_size;
-	object_pool_index_t idx;
+	size_t idx;
 	char *target;
-	object_pool_index_t tmp;
+	size_t tmp;
 
 	if (!pool)
 		return NULL;
@@ -60,22 +75,22 @@ void *object_pool_acquire(struct object_pool *pool)
 
 	target = pool->block + idx * pool->struct_size;
 
-	pool->head = *(object_pool_index_t *)target;
-	*(object_pool_index_t *)target = head;
+	pool->head = *(size_t *)target;
+	*(size_t *)target = head;
 
-	return target + sizeof(object_pool_index_t); /* result is the object, excluding the header */
+	return target + sizeof(size_t); /* result is the object, excluding the header */
 }
 
 int object_pool_release(struct object_pool *pool, void *object) 
 {
-	object_pool_index_t *offset;
-	object_pool_index_t tmp;
+	size_t *offset;
+	size_t tmp;
 
 	if (!pool || !object) {
 		return -EINVAL;
 	}
 
-	offset = (object_pool_index_t *)((char *)object - sizeof(object_pool_index_t));
+	offset = (size_t *)((char *)object - sizeof(size_t));
 
 	tmp = pool->head;
 	pool->head = *offset;
@@ -86,11 +101,11 @@ int object_pool_release(struct object_pool *pool, void *object)
 
 static void object_pool_offsets_init(struct object_pool *pool)
 {
-	object_pool_count_t i = 0;
-	object_pool_count_t count = pool->count;
+	size_t i = 0;
+	size_t count = pool->count;
 	char *block = pool->block;
 	size_t struct_size = pool->struct_size;
-	object_pool_index_t tmp;
+	size_t tmp;
 
 	for (;;) {
 		if (i == count)
@@ -103,7 +118,7 @@ static void object_pool_offsets_init(struct object_pool *pool)
 			tmp = i + 1 + 1; /* zero was reserved so next handle */
 		}
 
-		*(object_pool_index_t *)(block + i * struct_size) = tmp;
+		*(size_t *)(block + i * struct_size) = tmp;
 
 		i++;
 	}

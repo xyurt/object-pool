@@ -1,4 +1,4 @@
-#include "pool.h"
+#include "yarnet/pool.h"
 
 #include <string.h>
 #include <stddef.h>
@@ -17,14 +17,16 @@ static void object_pool_offsets_init(struct object_pool *pool);
 
 int object_pool_init(struct object_pool *pool, size_t capacity, size_t object_size)
 {
-	size_t struct_size = sizeof(size_t) + object_size;
+	size_t struct_size;
+
+	if (!pool || capacity == 0 || object_size == 0)
+		return -EINVAL;
+
+	struct_size = sizeof(size_t) + object_size;
 
 	if (ALIGN_ENABLED) {
 		struct_size = ALIGN(struct_size);
 	}
-
-	if (!pool || capacity == 0 || object_size == 0)
-		return -EINVAL;
 
 	pool->block = OBJECT_POOL_MALLOC(capacity * struct_size);
 	if (!pool->block)

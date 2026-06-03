@@ -24,7 +24,7 @@ typedef struct packet {
 	int length;
 } packet_t;
 
-void packet_send(packet *pkt)
+void packet_send(packet_t *pkt)
 {
 	printf("%.*s\n", pkt->length, pkt->payload);
 }
@@ -32,7 +32,7 @@ void packet_send(packet *pkt)
 int main(void)
 {
 	object_pool_t pool;
-	if (object_pool_init(&pool, 1024, sizeof(packet)) < 0) {
+	if (object_pool_init(&pool, 1024, sizeof(packet_t)) < 0) {
 		printf("Object pool initialization failed.\n");
 		return -1;
 	}

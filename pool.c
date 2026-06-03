@@ -4,32 +4,7 @@
 #include <stddef.h>
 #include <errno.h>
 
-static void object_pool_offsets_init(struct object_pool *pool)
-{
-	object_pool_count_t i = 0;
-	object_pool_count_t count = pool->count;
-	char *block = pool->block;
-	size_t struct_size = pool->struct_size;
-	object_pool_index_t tmp;
-
-	for (;;) {
-		if (i == count)
-			break;
-
-		if (i + 1 == count) {
-			tmp = 0;
-		}
-		else {
-			tmp = i + 1 + 1; /* zero was reserved so next handle */
-		}
-
-		*(object_pool_index_t *)(block + i * struct_size) = tmp;
-
-		i++;
-	}
-
-	pool->head = 1;
-}
+static void object_pool_offsets_init(struct object_pool *pool);
 
 int object_pool_init(struct object_pool *pool, object_pool_count_t count, size_t object_size) 
 {
@@ -107,4 +82,31 @@ int object_pool_release(struct object_pool *pool, void *object)
 	*offset = tmp;
 
 	return 0;
+}
+
+static void object_pool_offsets_init(struct object_pool *pool)
+{
+	object_pool_count_t i = 0;
+	object_pool_count_t count = pool->count;
+	char *block = pool->block;
+	size_t struct_size = pool->struct_size;
+	object_pool_index_t tmp;
+
+	for (;;) {
+		if (i == count)
+			break;
+
+		if (i + 1 == count) {
+			tmp = 0;
+		}
+		else {
+			tmp = i + 1 + 1; /* zero was reserved so next handle */
+		}
+
+		*(object_pool_index_t *)(block + i * struct_size) = tmp;
+
+		i++;
+	}
+
+	pool->head = 1;
 }

@@ -66,7 +66,7 @@ void *object_pool_acquire(struct object_pool *pool);
  * @pool: Pointer of the pool structure. Must not be NULL.
  * @object: Pointer of the object acquired. Must not be NULL.
  * 
- * Releases an acquired object from the object pool. Double release is handled without error.
+ * Releases an acquired object from the object pool.
  * Object pointer is invalid after release.
  *
  * Return: Returns 0 on success. If arguments are invalid returns -EINVAL.

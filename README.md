@@ -1,6 +1,5 @@
 # Object Pool (C)
-
-## A lightweight C89-compatible fixed-size object pool.
+**A lightweight C89-compatible fixed-size object pool.**
 
 # Overview
 

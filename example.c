@@ -13,13 +13,13 @@ void packet_send(packet *pkt) {
 }
 
 int main(int argc, char *argv[]) {
- 
-	object_pool pool = object_pool_create(1024, sizeof(packet));
-	if (pool == OBJECT_POOL_INVALID) {
-		return 1;
+	object_pool_t pool;
+	if (object_pool_init(&pool, 1024, sizeof(packet)) < 0) {
+		printf("Object pool initialization failed.\n");
+		return -1;
 	}
 
-	packet *packet_p = object_pool_pop(pool);
+	packet *packet_p = object_pool_acquire(&pool);
 	if (packet_p != NULL) {
 		const char *packet_payload = "Hello, World!";
 		packet_p->length = strlen(packet_payload);
@@ -27,13 +27,13 @@ int main(int argc, char *argv[]) {
 
 		packet_send(packet_p);
 
-		object_pool_push(packet_p);
+		object_pool_release(&pool, packet_p);
 	}
 	else {
 		printf("Pool exhausted or allocation failure.\n");
 	}
 
-	object_pool_destroy(pool);
+	object_pool_cleanup(&pool);
 
 	return 0;
 }

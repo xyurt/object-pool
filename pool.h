@@ -2,7 +2,7 @@
 #define _OBJECT_POOL_H
 
 #if defined(OBJECT_POOL_MALLOC) ^ defined(OBJECT_POOL_FREE)
-#error OBJECT_POOL_MALLOC and OBJECT_POOL_FREE both need to be defined in order to use custom allocators
+#error "OBJECT_POOL_MALLOC and OBJECT_POOL_FREE both need to be defined in order to use custom allocators"
 #endif
 
 #ifndef OBJECT_POOL_MALLOC
@@ -11,17 +11,17 @@
 #define OBJECT_POOL_FREE free
 #endif
 
-#ifndef OBJECT_POOL_INDEX_TYPE
-#define OBJECT_POOL_INDEX_TYPE size_t
-#endif
-
-typedef OBJECT_POOL_INDEX_TYPE object_pool_index_t;
-typedef object_pool_index_t object_pool_count_t;
+/* 
+* 
+* Use OBJECT_POOL_NO_ALIGN definition to disable alignments. 
+* This may reduce performance or even be undefined behaviour on some architectures. 
+* 
+*/
 
 struct object_pool {
 	char *block;
-	object_pool_index_t head;
-	object_pool_count_t count;
+	size_t head;
+	size_t count;
 	size_t struct_size;
 	size_t object_size;
 };
@@ -29,7 +29,7 @@ struct object_pool {
 typedef struct object_pool object_pool_t;
 
 /**
- * object_pool_init(struct object_pool *pool, object_pool_count_t count, size_t object_size) - Initializes the object pool structure
+ * object_pool_init(struct object_pool *pool, size_t count, size_t object_size) - Initializes the object pool structure
  * @pool: Pointer of the pool structure. Must not be NULL.
  * @count: Object count to be allocated. Must be more than zero.
  * @object_size: Each object's size. Must be more than zero.
@@ -38,7 +38,7 @@ typedef struct object_pool object_pool_t;
  *
  * Return: Returns 0 on success. If arguments are invalid returns -EINVAL. If malloc fails, returns -ENOMEM.
  */
-int object_pool_init(struct object_pool *pool, object_pool_count_t count, size_t object_size);
+int object_pool_init(struct object_pool *pool, size_t count, size_t object_size);
 
 /**
  * object_pool_cleanup(struct object_pool *pool) - Cleans up the object pool structure

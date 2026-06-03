@@ -29,7 +29,7 @@ void packet_send(packet *pkt)
 	printf("%.*s\n", pkt->length, pkt->payload);
 }
 
-int main(int argc, char *argv[])
+int main(void)
 {
 	object_pool_t pool;
 	if (object_pool_init(&pool, 1024, sizeof(packet)) < 0) {

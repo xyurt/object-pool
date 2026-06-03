@@ -3,12 +3,13 @@
 
 #include "pool.h"
 
-typedef struct packet_t {
+typedef struct packet {
 	char payload[2048];
 	int length;
-} packet;
+} packet_t;
 
-void packet_send(packet *pkt) {
+void packet_send(packet *pkt)
+{
 	printf("%.*s\n", pkt->length, pkt->payload);
 }
 
@@ -20,7 +21,7 @@ int main(void)
 		return -1;
 	}
 
-	packet *packet_p = object_pool_acquire(&pool);
+	packet_t *packet_p = object_pool_acquire(&pool);
 	if (packet_p) {
 		const char *packet_payload = "Hello, World!";
 		packet_p->length = strlen(packet_payload);

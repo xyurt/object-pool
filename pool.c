@@ -61,10 +61,8 @@ int object_pool_cleanup(struct object_pool *pool)
 void *object_pool_acquire(struct object_pool *pool) 
 {
 	size_t head;
-	size_t struct_size;
 	size_t idx;
 	char *target;
-	size_t tmp;
 
 	if (!pool)
 		return NULL;
